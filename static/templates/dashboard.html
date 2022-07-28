@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>MOD</title>
+
+    <meta name="google-signin-client_id" content="{{.clientId}}">
+    <link rel="stylesheet" type="text/css" href="/static/css/dashboard.css"/>
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet"/>
+</head>
+<body>
+
+<div class="mainContainer">
+    <div class="video-container">
+        <div id="playerContainer">
+            <video name="videoElement" class="centeredVideo" muted controls>
+                Your browser is too old which doesn't support HTML5 video.
+            </video>
+        </div>
+    </div>
+    <div class="controls">
+        <select style="width: 600px;" id="channels" name="channels"
+                onchange="if (this.selectedIndex) changeChannel(this.selectedOptions[0]);"></select>
+        <button onclick="player_start()">Start</button>
+        <button onclick="player_pause()">Pause</button>
+        <button onclick="player.muted=true">Mute</button>
+        <button onclick="player.muted=false">Unmute</button>
+        <button onclick="prevChannel()">Prev Channel</button>
+        <button onclick="nextChannel()">Next Channel</button>
+
+    </div>
+    <textarea name="logcatbox" class="logcatBox" rows="10" readonly></textarea>
+</div>
+
+<script src="/static/js/mpegts.js"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js"
+        integrity="sha512-bLT0Qm9VnAYZDflyKcBaQ2gg0hSYNQrJ8RilYldYQ1FxQYoCLtUjuuRuZo+fjqhx/qtq/1itJ0C2ejDxltZVFg=="
+        crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
+
+    var player;
+    let channels;
+    let startup = true;
+
+    function player_load(id) {
+
+        console.log('isSupported: ' + mpegts.isSupported());
+        var mediaDataSource = {
+            type: 'mse'
+        };
+        mediaDataSource['isLive'] = true;
+        mediaDataSource['cors'] = true;
+        mediaDataSource['withCredentials'] = true;
+        mediaDataSource['liveBufferLatencyChasing'] = true;
+        mediaDataSource['url'] = window.location.origin + "/streaming/" + id;
+        player_load_mds(mediaDataSource);
+        localStorage.setItem("last", id);
+    }
+
+    function player_load_mds(mediaDataSource) {
+        var element = document.getElementsByName('videoElement')[0];
+        if (typeof player !== "undefined") {
+            if (player != null) {
+                player.unload();
+                player.detachMediaElement();
+                player.destroy();
+                player = null;
+            }
+        }
+        player = mpegts.createPlayer(mediaDataSource, {
+            enableWorker: true,
+            lazyLoadMaxDuration: 3 * 60,
+            seekType: 'range',
+            liveBufferLatencyChasing: true,
+        });
+
+        player.attachMediaElement(element);
+        player.load();
+        if(startup){
+            player.muted = true;
+            player.play();
+            startup=false;
+        }else{
+            player.muted = false;
+            player.play();
+
+        }
+    }
+
+    function player_start() {
+        player.play();
+    }
+
+    function player_pause() {
+        player.pause();
+    }
+
+    function player_destroy() {
+        player.pause();
+        player.unload();
+        player.detachMediaElement();
+        player.destroy();
+        player = null;
+    }
+
+    function showVersion() {
+        var version = mpegts.version;
+        document.title = document.title + " (v" + version + ")";
+    }
+
+    var logcatbox = document.getElementsByName('logcatbox')[0];
+    mpegts.LoggingControl.addLogListener(function (type, str) {
+        logcatbox.value = logcatbox.value + str + '\n';
+        logcatbox.scrollTop = logcatbox.scrollHeight;
+    });
+
+    function changeChannel(channel) {
+        player_load(channel.value);
+    }
+
+    function nextChannel(){
+        let next = $('#channels').find(':selected')[0].nextSibling;
+        if (next !== undefined){
+            $('#channels').val(next.value)
+            $('#channels').trigger('change')
+        }
+    }
+    function prevChannel(){
+        let prev = $('#channels').find(':selected')[0].previousSibling;
+        if (prev !== undefined){
+            $('#channels').val(prev.value)
+            $('#channels').trigger('change')
+        }
+    }
+
+
+    async function loadChannelList() {
+        await fetch("/api/channels").then((r) => r.json())
+            .then((r) => {
+                channels = r;
+
+                lastChannel = localStorage.getItem("last");
+
+                Object.keys(r).forEach(function (k) {
+
+                    let id = String(r[k].id).padStart(3, "0");
+                    let name = r[k].name
+                    var option = new Option(id + " - " + name, id, id === lastChannel, id === lastChannel);
+                    $('#channels').append(option);
+                });
+                $('#channels').trigger('change')
+
+            })
+    }
+
+    document.addEventListener('DOMContentLoaded', async function () {
+        $("#channels").select2({});
+        showVersion();
+        await loadChannelList();
+    });
+</script>
+</body>
+</html>

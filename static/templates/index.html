@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Login</title>
+    <meta name="google-signin-client_id" content="{{.clientId}}">
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+</head>
+<body>
+
+<div id="g_id_onload"
+     data-client_id="{{.clientId}}"
+     data-context="signin"
+     data-ux_mode="popup"
+     data-callback="onSignIn"
+     data-auto_select="false">
+</div>
+
+<div class="g_id_signin"
+     data-type="standard"
+     data-shape="rectangular"
+     data-theme="outline"
+     data-text="signin_with"
+     data-size="large"
+     data-logo_alignment="left">
+</div>
+
+<script>
+    function onSignIn(googleUser) {
+        let idToken = googleUser.credential;
+        fetch("/login", {
+            body: JSON.stringify({idToken: idToken}),
+            headers: {
+                'content-type': 'application/json'
+            },
+            credentials: 'same-origin',
+            method: 'POST',
+            cache: 'no-cache'
+        })
+            .then(response => response.json())
+            .then((response) => {
+                if (!response.hasOwnProperty("email")) {
+                    alert(response.error);
+                    signOut();
+                    return;
+                }
+                window.location.href = "/dashboard";
+            })
+    }
+
+    function signOut() {
+        var auth2 = gapi.auth2.getAuthInstance();
+        auth2.signOut().then(function () {
+            window.location.href="/logout";
+        });
+    }
+
+    function init() {
+        gapi.load('auth2', function () {
+            gapi.auth2.init();
+        });
+    }
+</script>
+</body>
+</html>
